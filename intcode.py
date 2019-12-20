@@ -7,6 +7,7 @@ class IntCode(object):
 				self.version = 'v1.1'
 				self.status = 'active'
 				self.state = None
+				self.rel_base = 0
 
 		def print_all(self):
 				print('5tate ->', self.state)
@@ -20,24 +21,36 @@ class IntCode(object):
 
 
 		def _get_opcode_and_params(self, instruction):
-				return str(instruction).zfill(4)[-2:], str(instruction).zfill(4)[:-2]
+				return str(instruction).zfill(5)[-2:], str(instruction).zfill(5)[:-2]
+
+		def _assign(self, inpt, param, offset):
+			if param == '0':
+					self.state[self.state[self.anchor+offset]] = inpt
+			elif param == '2':
+					self.state[self.state[self.anchor+offset]+self.rel_base] = inpt
+			else:
+					print('shit')
 
 
 		def _get_values(self, opcode, params):
 
-				p_verb = params[0]
-				p_noun = params[1]
+				p_verb = params[-2]
+				p_noun = params[-1]
 
 				if p_noun == '0':
 						noun = self.state[self.state[self.anchor+1]]
 				elif p_noun =='1':
 
 						noun = self.state[self.anchor+1]
-				if opcode != '04':
+				elif p_noun == '2':
+						noun = self.state[self.state[self.anchor+1]+self.rel_base]
+				if opcode != '04' and opcode != '09':
 						if p_verb == '0':
 								verb = self.state[self.state[self.anchor+2]]
 						elif p_verb =='1':
 								verb = self.state[self.anchor+2]
+						elif p_verb == '2':
+								verb = self.state[self.state[self.anchor+2]+self.rel_base]
 				else:
 						verb = None
 
@@ -47,16 +60,16 @@ class IntCode(object):
 		def _run_for_opcode(self, opcode, params):
 
 				if opcode == '01':
-						self.state[self.state[self.anchor+3]] = sum(self._get_values(opcode, params))
+						self._assign(sum(self._get_values(opcode, params)), params[0], offset=3)
 						self.anchor += 4
 
 				if opcode == '02':
+						self._assign(np.prod(self._get_values(opcode, params)), params[0], offset=3)
 
-						self.state[self.state[self.anchor+3]] = np.prod(self._get_values(opcode, params))
 						self.anchor += 4
 
 				if opcode == '03':
-						self.state[self.state[self.anchor+1]] = self.inputs.pop(0)
+						self._assign(self.inputs.pop(0), params[-1], offset=1)
 						self.anchor += 2
 
 				if opcode == '04':
@@ -80,21 +93,27 @@ class IntCode(object):
 				if opcode == '07':
 						noun, verb = self._get_values(opcode, params)
 						if noun < verb:
-								self.state[self.state[self.anchor+3]] = 1
+								self._assign(1, params[0], offset=3)
 						else:
-								self.state[self.state[self.anchor+3]] = 0
+								self._assign(0, params[0], offset=3)
 						self.anchor += 4
 
 				if opcode == '08':
 						noun, verb = self._get_values(opcode, params)
 						if noun == verb:
-								self.state[self.state[self.anchor+3]] = 1
+								self._assign(1, params[0], offset=3)
 						else:
-								self.state[self.state[self.anchor+3]] = 0
+								self._assign(0, params[0], offset=3)
 						self.anchor += 4
 
+				if opcode == '09':
+						noun, verb = self._get_values(opcode, params)
+						self.rel_base += noun
+						self.anchor += 2
 
-		def compute(self, state=None, inputs=None, verbose=False, pause_on_output=True):
+
+
+		def compute(self, state=None, inputs=None, verbose=True, pause_on_output=False):
 				if state is not None: self.state = state
 				if self.status == 'paused': self.status = 'active'
 				self.inputs = inputs
@@ -102,7 +121,7 @@ class IntCode(object):
 				while 1:
 						instruction = self._get_instruction()
 						if verbose: print('Instruction: ', instruction)
-						if instruction == 99:
+						if str(instruction)[-2:] == '99':
 								self.status = 'halted'
 								return
 						opcode, params = self._get_opcode_and_params(instruction)
@@ -137,5 +156,9 @@ if __name__=='__main__':
 		sys.exit()
 	print('Args: ', sys.argv)
 	state = list(eval(open(sys.argv[1]).read()))
+	print(len(state))
+	if sys.argv[3] == '-1':
+			state.extend([0]*len(state)*10)
+	print(len(state))
 	inputs = list(map(int, open(sys.argv[2]).read()[:-1].split(',')))
 	sim(state, inputs)
